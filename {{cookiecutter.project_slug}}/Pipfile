@@ -13,6 +13,7 @@ watchfiles = "*"
 rich = "*"
 requests = "*"
 click = "*"
+pyyaml = "*"
 {%- endif %}
 
 [dev-packages]

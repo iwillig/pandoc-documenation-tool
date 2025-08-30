@@ -1,0 +1,19 @@
+# LanguageTool Custom Dictionary
+# List of words to ignore during grammar checking
+# Add project-specific terms, acronyms, and proper nouns
+
+- API
+- CLI
+- CSS
+- HTML
+- JSON
+- YAML
+- Pandoc
+- org-mode
+- cookiecutter
+- pipenv
+- ruff
+- typos-cli
+- LanguageTool
+- {{ cookiecutter.project_name }}
+- {{ cookiecutter.author_name }}

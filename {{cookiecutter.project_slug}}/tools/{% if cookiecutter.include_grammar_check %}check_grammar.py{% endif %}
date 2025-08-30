@@ -14,6 +14,7 @@ from pathlib import Path
 
 import click
 import requests
+import yaml
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -27,6 +28,36 @@ console = Console()
 # LanguageTool API configuration
 LANGUAGETOOL_API_URL = "https://api.languagetool.org/v2/check"
 RATE_LIMIT_DELAY = 3  # seconds between requests to respect rate limits
+
+# Custom dictionary file path
+CUSTOM_DICTIONARY_FILE = ".languagetool-dictionary.yml"
+
+
+def load_custom_dictionary(path="."):
+    """Load custom dictionary words from YAML file."""
+    dict_path = Path(path) / CUSTOM_DICTIONARY_FILE
+    custom_words = []
+
+    if dict_path.exists():
+        try:
+            with open(dict_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+                if isinstance(data, list):
+                    custom_words = [str(word).strip() for word in data if word]
+                else:
+                    console.print(f"[yellow]Warning: {CUSTOM_DICTIONARY_FILE} must contain a YAML list[/yellow]")
+
+            if custom_words:
+                console.print(f"[green]✓ Loaded {len(custom_words)} words from custom dictionary[/green]")
+        except yaml.YAMLError as e:
+            console.print(f"[yellow]Warning: Invalid YAML in custom dictionary: {e}[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not load custom dictionary: {e}[/yellow]")
+    else:
+        console.print(f"[dim]No custom dictionary found at {dict_path}[/dim]")
+        console.print(f"[dim]Create {CUSTOM_DICTIONARY_FILE} with a YAML list of custom words to ignore[/dim]")
+
+    return custom_words
 
 
 def find_org_files(root_dir="."):
@@ -44,56 +75,34 @@ def find_org_files(root_dir="."):
 
 
 def org_to_text(org_content, file_path):
-    """Convert org-mode content to plain text."""
-    # Try using pandoc if available
+    """Convert org-mode content to plain text using pandoc."""
     try:
         result = subprocess.run(
             ["pandoc", "-f", "org", "-t", "plain"],
             input=org_content,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=10,
         )
         if result.returncode == 0:
             return result.stdout
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-
-    # Fallback: Simple org-to-text conversion
-    lines = org_content.split("\n")
-    text_lines = []
-
-    for line in lines:
-        # Skip org-mode metadata/settings
-        if line.startswith("#+"):
-            continue
-
-        # Remove org-mode markup
-        # Remove emphasis markers
-        line = re.sub(r"\*([^\*]+)\*", r"\1", line)  # bold
-        line = re.sub(r"/([^/]+)/", r"\1", line)  # italic
-        line = re.sub(r"_([^_]+)_", r"\1", line)  # underline
-        line = re.sub(r"\+([^\+]+)\+", r"\1", line)  # strikethrough
-        line = re.sub(r"~([^~]+)~", r"\1", line)  # code
-        line = re.sub(r"=([^=]+)=", r"\1", line)  # verbatim
-
-        # Remove links
-        line = re.sub(r"\[\[([^\]]+)\]\[([^\]]+)\]\]", r"\2", line)  # [[url][desc]]
-        line = re.sub(r"\[\[([^\]]+)\]\]", r"\1", line)  # [[url]]
-
-        # Clean up headings
-        line = re.sub(r"^\*+\s+", "", line)
-
-        # Remove TODO keywords
-        line = re.sub(r"^(TODO|DONE|WAITING|CANCELLED)\s+", "", line)
-
-        text_lines.append(line)
-
-    return "\n".join(text_lines)
+        else:
+            console.print(f"[red]Pandoc conversion failed for {file_path}: {result.stderr}[/red]")
+            return None
+    except FileNotFoundError:
+        console.print("[red]Error: pandoc is not installed. Please install pandoc to use grammar checking.[/red]")
+        console.print("[yellow]Install with: brew install pandoc (macOS) or apt-get install pandoc (Linux)[/yellow]")
+        exit(1)
+    except subprocess.TimeoutExpired:
+        console.print(f"[red]Pandoc conversion timed out for {file_path}[/red]")
+        return None
+    except subprocess.SubprocessError as e:
+        console.print(f"[red]Pandoc error for {file_path}: {e}[/red]")
+        return None
 
 
-def check_grammar(text, language="en-US"):
-    """Check grammar using LanguageTool API."""
+def check_grammar(text, language="en-US", custom_words=None):
+    """Check grammar using LanguageTool API with custom dictionary support."""
     # Limit text size to avoid API limits (20KB max)
     max_chars = 20000
     if len(text) > max_chars:
@@ -109,6 +118,11 @@ def check_grammar(text, language="en-US"):
         # Disable some rules that don't work well with converted org text
         "disabledRules": "WHITESPACE_RULE,EN_QUOTES,EN_UNPAIRED_BRACKETS",
     }
+
+    # Add custom words to ignore list
+    if custom_words:
+        # LanguageTool API accepts ignoreWords as comma-separated string
+        params["ignoreWords"] = ",".join(custom_words)
 
     try:
         response = requests.post(LANGUAGETOOL_API_URL, data=params, timeout=30)
@@ -229,6 +243,10 @@ def main(language, path):
     )
     console.print()
 
+    # Load custom dictionary
+    custom_words = load_custom_dictionary(path)
+    console.print()
+
     # Find org files
     org_files = find_org_files(path)
     if not org_files:
@@ -260,8 +278,13 @@ def main(language, path):
             # Convert to text
             text = org_to_text(org_content, file_path)
 
-            # Check grammar
-            result = check_grammar(text, language)
+            # Skip if conversion failed
+            if text is None:
+                results[str(file_path)] = -1
+                continue
+
+            # Check grammar with custom dictionary
+            result = check_grammar(text, language, custom_words)
 
             progress.stop_task(task)
             progress.update(task, description=f"Checked: {file_path.name}")
