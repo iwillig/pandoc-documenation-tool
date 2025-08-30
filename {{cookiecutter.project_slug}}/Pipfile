@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pypandoc = "*"
+pandoc-numbering = "*"
+pandoc-include = "*"
+pandoc-plantuml-filter = "*"
+watchfiles = "*"
+{%- if cookiecutter.include_grammar_check %}
+rich = "*"
+requests = "*"
+click = "*"
+{%- endif %}
+
+[dev-packages]
+ruff = "*"
+
+[requires]
+python_version = "{{ cookiecutter.python_version }}"

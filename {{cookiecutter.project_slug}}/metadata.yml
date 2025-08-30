@@ -1,0 +1,14 @@
+title: "{{ cookiecutter.project_name }}"
+author: "{{ cookiecutter.author_name }}"
+email: "{{ cookiecutter.author_email }}"
+description: "{{ cookiecutter.project_description }}"
+lang: "{{ cookiecutter.document_language }}"
+toc-title: "Table of Contents"
+sections:
+  {%- if cookiecutter.create_introduction_chapter %}
+  - chapters/introduction.org
+  {%- endif %}
+css:
+  - css/pico.min.css
+  - css/docs.css
+  - css/highlighting.css
