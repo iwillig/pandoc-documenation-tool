@@ -90,8 +90,14 @@ your-project/
 
 #### macOS
 ```bash
-brew install pandoc yq
-pip install pipenv cookiecutter
+# Option 1: Using Homebrew directly
+brew install pandoc yq pipenv typos-cli
+pip install cookiecutter
+
+# Option 2: Using Brewfile (after generating project)
+cd your-project/
+brew bundle
+pip install cookiecutter
 ```
 
 #### Ubuntu/Debian
